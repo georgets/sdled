@@ -34,7 +34,7 @@ HELP = """
 
 CLASS = '/sys/class/enclosure/'
 SLOT = 'Slot '  # with space
-
+filter = None
 
 def enc_list():
     '''
@@ -82,7 +82,7 @@ def find_name(enc, slot):
     return None
 
 
-def get_status(path):
+def get_status(path, slot_offset=0):
     '''
         return status and block device name of given path
         return touple:
@@ -114,7 +114,18 @@ def get_status(path):
             locate = 'locate_off'
     except:
             locate = 'locate_N/A'
-    return (block, fault, locate)
+
+    try:
+        slot=int(file(os.path.join(path, 'slot'), 'r').readline().strip()) + slot_offset
+    except:
+        slot= '-'
+
+    try:
+        wwid = file(os.path.join(path, 'device', 'wwid'), 'r').readline().strip().replace('naa.','3')
+    except:
+        wwid = '-'
+        
+    return (block, fault, locate, slot, wwid)
 
 
 def set_status(path, status):
@@ -137,7 +148,7 @@ def set_status(path, status):
 def print_status(enc, slot, status):
     out = str(enc)+'/' + str(slot)+'\t'
     if status:
-        out = out + str(status[0]) + '\t' + str(status[1]) + '\t' + str(status[2])
+        out = out + str(status[0]) + '\t' + str(status[1]) + '\t' + str(status[2]) + '\t' + "%02d" % status[3] + '\t' + str(status[4])
     else:
         out = out + '(Not available)'
     out = out
@@ -147,10 +158,20 @@ def print_status(enc, slot, status):
 def list_all():
     devlist = []
     for e in enc_list():
+        try:
+            model=file(os.path.join(CLASS, e, 'device','model'), 'r').readline().strip()
+        except:
+            model= '-'
+    
+        slot_offset=0
+        if model=='SAS3x48Rear':
+            slot_offset=30
+
         for s in slot_list(e):
             path = find_name(e, s)
-            status = get_status(path)
+            status = get_status(path, slot_offset=slot_offset)
             devlist.append((e, s, path, status))
+
     return devlist
 
 
@@ -168,8 +189,8 @@ def main(argv):
         if not devlist:
             print ("No enclosure devices found")
             return(-1)
-        print ("ENCLOSURE/SLOT\tDEV\tFAULT_LED\tLOCATION_LED")
-        print ("-"*52)
+        # print ("ENCLOSURE/SLOT\tDEV\tFAULT_LED\tLOCATION_LED\tSLOT\tWWID")
+        # print ("-"*52)
         for d in devlist:
             print_status(d[0], d[1], d[3])
         return(0)
